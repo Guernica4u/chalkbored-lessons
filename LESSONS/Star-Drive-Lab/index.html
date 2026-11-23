@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
+    <title>Star Drive Lab</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0d1620; }
+      #unity-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #0d1620; outline: none; }
+      #message { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); max-width: 80vw; padding: 10px 14px;
+                 border-radius: 6px; background: #7a2230; color: white; font: 14px system-ui, sans-serif; display: none; z-index: 2; }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="message"></div>
+    <script>
+      // Web port of StellarDrive by Curious Owl Games.
+      var canvas = document.querySelector("#unity-canvas");
+
+      // Crossplay relay address (wss://...workers.dev after deploying WebPortTools/crossplay/relay-cloudflare). Empty:
+      // this page's own host on port 8090 (local testing). The page URL can override it with ?relay=ws://...
+      window.webportRelayUrl = "wss://stellardrive-relay.guernica4u.workers.dev";
+
+      // Build files over 24 MB are split into .part1, .part2, ... by the GitHub Pages build (GitHub's web upload takes
+      // at most 25 MB per file); filled in by Assets/Editor/WebPort/WebBuild.cs: { "file name": number of parts }.
+      var splitFiles = { "WebPages.data.unityweb": 2 };
+
+      // fetches the parts of a split file and joins them into one in-memory file for Unity's loader
+      function joinParts(url, parts) {
+        var requests = [];
+        for (var i = 1; i <= parts; i++) {
+          requests.push(fetch(url + ".part" + i).then(function (response) {
+            if (!response.ok) throw new Error(response.status + " " + response.url);
+            return response.blob();
+          }));
+        }
+        return Promise.all(requests).then(function (blobs) { return URL.createObjectURL(new Blob(blobs)); });
+      }
+
+      function showMessage(msg, type) {
+        var box = document.querySelector("#message");
+        box.innerHTML = msg;
+        box.style.display = "block";
+        box.style.background = type == "error" ? "#7a2230" : "#6b5a1a";
+        if (type != "error") setTimeout(function () { box.style.display = "none"; }, 6000);
+      }
+
+      // Unity's web audio mixes straight into the browser's output with no limiter; loud overlapping sounds (many
+      // thrusters) clip and crackle. Route everything through a limiter by handing Unity a compressor node as the
+      // AudioContext destination.
+      (function () {
+        var NativeContext = window.AudioContext || window.webkitAudioContext;
+        if (!NativeContext) return;
+        function LimitedAudioContext(options) {
+          var ctx = new NativeContext(options);
+          var limiter = ctx.createDynamicsCompressor();
+          limiter.threshold.value = -6;
+          limiter.knee.value = 6;
+          limiter.ratio.value = 20;
+          limiter.attack.value = 0.003;
+          limiter.release.value = 0.25;
+          limiter.connect(ctx.destination);
+          Object.defineProperty(ctx, "destination", { value: limiter });
+          (window.webportAudioContexts = window.webportAudioContexts || []).push(ctx);
+          return ctx;
+        }
+        LimitedAudioContext.prototype = NativeContext.prototype;
+        window.AudioContext = LimitedAudioContext;
+        if (window.webkitAudioContext) window.webkitAudioContext = LimitedAudioContext;
+      })();
+
+      if (!navigator.gpu) {
+        showMessage("This game needs WebGPU. Please use a recent Chrome, Edge or Brave on desktop.", "error");
+      } else {
+        var buildUrl = "Build";
+        var config = {
+          arguments: [],
+          dataUrl: buildUrl + "/WebPages.data.unityweb",
+          frameworkUrl: buildUrl + "/WebPages.framework.js.unityweb",
+          codeUrl: buildUrl + "/WebPages.wasm.unityweb",
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "CuriousOwlGames",
+          productName: "StellarDrive",
+          productVersion: "0.6.5",
+          showBanner: showMessage,
+          // Unity's web audio prints three harmless "FMOD returns error ..." lines for every new audio source (parts
+          // spawning, sounds); printing them costs time in that frame, so they're dropped.
+          print: function (message) {
+            if (typeof message == "string" && message.indexOf("FMOD returns error") == 0) return;
+            console.log(message);
+          },
+          // Saves and settings live in Application.persistentDataPath (IndexedDB); keep them across visits.
+          autoSyncPersistentDataPath: true,
+          // joined split files have a new address on every visit: don't copy them into Unity's download cache
+          // (the browser's own cache keeps the parts)
+          cacheControl: function (url) {
+            return url.indexOf("blob:") == 0 ? "no-store" : "must-revalidate";
+          },
+        };
+
+        var joining = ["dataUrl", "codeUrl", "frameworkUrl"].map(function (key) {
+          var name = (config[key] || "").split("/").pop();
+          if (!splitFiles[name]) return null;
+          return joinParts(config[key], splitFiles[name]).then(function (url) { config[key] = url; });
+        });
+
+        var script = document.createElement("script");
+        script.src = buildUrl + "/WebPages.loader.js";
+        script.onload = function () {
+          Promise.all(joining).then(function () {
+            return createUnityInstance(canvas, config);
+          }).then(function (unityInstance) {
+            window.unityInstance = unityInstance;
+          }).catch(function (message) {
+            showMessage("Failed to start: " + message, "error");
+          });
+        };
+        document.body.appendChild(script);
+      }
+    </script>
+  </body>
+</html>
