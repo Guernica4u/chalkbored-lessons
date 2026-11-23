@@ -1,0 +1,58 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+<title>Court Random</title>
+    <script>
+      const cancelFrame = window.cancelAnimationFrame.bind(window);
+      window.cancelAnimationFrame = function (value) {
+        return typeof value === "function"
+          ? window.requestAnimationFrame(value)
+          : cancelFrame(value);
+      };
+    </script>
+
+    <link
+      rel="stylesheet"
+      href="style.css"
+      type="text/css"
+    />
+    <script>
+      window.addEventListener(
+        "keydown",
+        function (e) {
+          if ([32, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault();
+        },
+        false,
+      );
+    </script>
+  </head>
+
+  <body>
+    <div id="fb-root"></div>
+    <script src="box2d.js"></script>
+    <noscript>
+      <div id="notSupportedWrap">
+        <h2 id="notSupportedTitle">This content requires JavaScript</h2>
+        <p class="notSupportedMessage">
+          JavaScript appears to be disabled. Please enable it to view this
+          content.
+        </p>
+      </div>
+    </noscript>
+    <script src="suppoortcheck.js"></script>
+    <script
+      src="offclient.js"
+      type="module"
+    ></script>
+    <script
+      src="main.js"
+      type="module"
+    ></script>
+    <script
+      src="registersw.js"
+      type="module"
+    ></script>
+    <script src="api.js"></script>
+  </body>
+</html>
