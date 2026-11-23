@@ -5,4 +5,6 @@ The main site (Guernica4u/ChalkBored) keeps the card list and covers. This repo 
 
 Each lesson lives at `LESSONS/<Folder>/`, the same path it had in the main repo.
 
-Deploy: `npx wrangler deploy` from this folder.
+Deploy: `node list-files.mjs && npx wrangler deploy` from this folder.
+
+Offline list: `node list-files.mjs` writes `files.json` (every lesson file and its size) for the offline download script. Run it before each deploy.
