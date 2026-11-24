@@ -1,8 +1,11 @@
 {
-  // Static file host for ChalkBored's lessons, at games.chalkbored.win.
+  // Static file host for ChalkBored's lessons, at lessons.chalkbored.win (games.chalkbored.win kept for old links and offline copies).
   // The main ChalkBored site loads lessons from here so its own repo stays small.
   "name": "chalkbored-lessons",
   "compatibility_date": "2026-11-01",
   "assets": { "directory": "." },
-  "routes": [{ "pattern": "games.chalkbored.win", "custom_domain": true }]
+  "routes": [
+    { "pattern": "lessons.chalkbored.win", "custom_domain": true },
+    { "pattern": "games.chalkbored.win", "custom_domain": true }
+  ]
 }
