@@ -38,6 +38,7 @@
     <meta name=viewport content="width=device-width, initial-scale=1">
     <title>Night Defense</title>
     <link rel="icon" href="nzportable.ico">
+    <script src="ndnet.js"></script>
     <style>
         html,
         body {
@@ -90,6 +91,7 @@
                     "nzp/game.pk3": gameUrl,
                     "nzp/progs.pk3": "nzp/progs.pk3"
                 },
+                arguments: ndNet.args(),
                 print: function (msg) {
                     console.log(msg);
                 },
