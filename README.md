@@ -7,4 +7,4 @@ Each lesson lives at `LESSONS/<Folder>/`, the same path it had in the main repo.
 
 Deploy: `node list-files.mjs && npx wrangler deploy` from this folder.
 
-Offline list: `node list-files.mjs` writes `files.json` (every lesson file and its size) for the offline download script. Run it before each deploy.
+Offline list and headers: `node list-files.mjs` writes `files.json` (every lesson file and its size) for the offline download script, `_headers` (images, sounds and SWF files cached for a day) and `packed.json` (packed Unity files, which `worker.js` sends with Content-Encoding so the browser unpacks them). Run it before each deploy.

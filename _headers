@@ -1,0 +1,32 @@
+/*.png
+  Cache-Control: public, max-age=86400
+/*.jpg
+  Cache-Control: public, max-age=86400
+/*.jpeg
+  Cache-Control: public, max-age=86400
+/*.gif
+  Cache-Control: public, max-age=86400
+/*.webp
+  Cache-Control: public, max-age=86400
+/*.svg
+  Cache-Control: public, max-age=86400
+/*.ico
+  Cache-Control: public, max-age=86400
+/*.mp3
+  Cache-Control: public, max-age=86400
+/*.ogg
+  Cache-Control: public, max-age=86400
+/*.wav
+  Cache-Control: public, max-age=86400
+/*.m4a
+  Cache-Control: public, max-age=86400
+/*.woff
+  Cache-Control: public, max-age=86400
+/*.woff2
+  Cache-Control: public, max-age=86400
+/*.ttf
+  Cache-Control: public, max-age=86400
+/*.otf
+  Cache-Control: public, max-age=86400
+/*.swf
+  Cache-Control: public, max-age=86400
