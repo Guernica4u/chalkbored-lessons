@@ -50,7 +50,7 @@ try {
   const host = await tab(`${page}?relay=${relay}`, 'host');
   await host.until('!!(window.FTEC && FTEC.evcb && FTEC.evcb.cbufaddtext)', 120, 'engine start');
   await sleep(3000);
-  await host.until('(()=>{try{FTEC.cbufadd("set maxclients 4\\nset god 1\\nmap ndu\\n")}catch{}return 1})()', 5, 'map command');
+  await host.until('(()=>{try{FTEC.cbufadd("sv_public 2\\nset maxclients 4\\nset god 1\\nmap ndu\\n")}catch{}return 1})()', 5, 'map command');
   const room = await host.until('ndNet.room', 180, 'room code');
   console.log('host room', room);
 
