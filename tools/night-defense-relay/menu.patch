@@ -1,0 +1,307 @@
+diff --git a/source/menu/defs/menu_defs.qc b/source/menu/defs/menu_defs.qc
+index 23c18c9..f168c0f 100644
+--- a/source/menu/defs/menu_defs.qc
++++ b/source/menu/defs/menu_defs.qc
+@@ -61,7 +61,9 @@ enum {
+     MENU_CREDITS,
+     MENU_PAUSE,
+     MENU_LOBBY,
+-    MENU_GAMESETTINGS
++    MENU_GAMESETTINGS,
++    MENU_COOPSERVER,
++    MENU_COOPLAN
+ };
+ 
+ #define MENU_SND_NAVIGATE 	0
+@@ -110,12 +112,18 @@ string(string next_id) Menu_Coop_Direct_GetNextButton;
+ string(string next_id) Menu_Coop_Join_GetNextButton;
+ string(string next_id) Menu_Coop_Create_GetNextButton;
+ string(string next_id) Menu_Coop_GetNextButton;
++string(string next_id) Menu_Coop_Server_GetNextButton;
++string(string next_id) Menu_Coop_Lan_GetNextButton;
+ 
+ string(string next_id) Menu_Coop_Browse_GetPreviousButton;
+ string(string next_id) Menu_Coop_Direct_GetPreviousButton;
+ string(string next_id) Menu_Coop_Join_GetPreviousButton;
+ string(string next_id) Menu_Coop_Create_GetPreviousButton;
+ string(string next_id) Menu_Coop_GetPreviousButton;
++string(string next_id) Menu_Coop_Server_GetPreviousButton;
++string(string next_id) Menu_Coop_Lan_GetPreviousButton;
++void() Menu_Coop_Server;
++void() Menu_Coop_Lan;
+ 
+ string(string prev_id) Menu_Maps_GetNextButton;
+ string(string next_id) Menu_Maps_GetPreviousButton;
+diff --git a/source/menu/m_menu.qc b/source/menu/m_menu.qc
+index 91dc9fc..652a878 100644
+--- a/source/menu/m_menu.qc
++++ b/source/menu/m_menu.qc
+@@ -1013,6 +1013,8 @@ void(vector size) root_menu =
+ 		case MENU_SOLO: menu_map_mode = MAP_SOLOSTOCK; Menu_Maps(); break;
+ 		case MENU_SOLOUSER: menu_map_mode = MAP_SOLOUSER; Menu_Maps(); break;
+ 		case MENU_COOP: Menu_Coop(); break;
++		case MENU_COOPSERVER: Menu_Coop_Server(); break;
++		case MENU_COOPLAN: Menu_Coop_Lan(); break;
+ 		case MENU_COOPJOIN: Menu_Coop_Join(); break;
+ 		case MENU_COOPBROWSE: Menu_Coop_Browse(); break;
+ 		case MENU_COOPDIRECT: Menu_Coop_Direct(); break;
+diff --git a/source/menu/menu_coop.qc b/source/menu/menu_coop.qc
+index def4893..ff97be0 100644
+--- a/source/menu/menu_coop.qc
++++ b/source/menu/menu_coop.qc
+@@ -157,6 +157,8 @@ void(string ip) Menu_Coop_Connect =
+ {
+ 	Menu_PlaySound(MENU_SND_ENTER);
+ 	m_toggle(false);
++	if (strstrofs(ip, "/") < 0 && strstrofs(ip, ".") < 0 && strstrofs(ip, ":") < 0)
++		ip = strcat("/", ip);
+ 	localcmd("connect ", ip, "\n");
+ 	map_name_override = "OVERRIDE";
+ };
+@@ -167,9 +169,9 @@ void() Menu_Coop_Direct =
+ 
+ 	Menu_DrawBackground();
+ 
+-	Menu_DrawTitle("DIRECT IP/ID");
++	Menu_DrawTitle("ENTER ROOM CODE");
+ 
+-	Menu_Button(1, "cdm_serverip", "SERVER IP/ROOM ID", "IP or ID for the Server (typically starts with /).");
++	Menu_Button(1, "cdm_serverip", "ROOM CODE", "The room code from the host's pause menu (or an IP/ID).");
+ 	Menu_TextInput("cdm_serverip", 1, server_ip, server_ip_cursor);
+ 
+ 	Menu_Button(2, "cdm_serverpassword", "SERVER PASSWORD", "Password for the Match set by the Host (optional).");
+@@ -183,14 +185,107 @@ void() Menu_Coop_Direct =
+ 	sui_pop_frame();
+ };
+ 
++// ChalkBored: server choice, connection mode and network games. The page (ndnet.js) sets the nd_* cvars
++// and reads the "ndnet ..." lines these print to the console.
++string() Menu_Coop_ModeName =
++{
++	string m = cvar_string("nd_mode");
++	if (m == "direct") return "Direct only";
++	if (m == "relay") return "Relay only";
++	return "Auto";
++};
++
++void() Menu_Coop_NextMode =
++{
++	string m = cvar_string("nd_mode");
++	if (m == "direct") m = "relay";
++	else if (m == "relay") m = "auto";
++	else m = "direct";
++	cvar_set("nd_mode", m);
++	localcmd(sprintf("echo ndnet mode %s\n", m));
++};
++
++void(string which) Menu_Coop_PickServer =
++{
++	cvar_set("nd_server", which);
++	if (which == "builtin")
++		cvar_set("net_ice_broker", "tls://master.frag-net.com:27950");
++	else
++		cvar_set("net_ice_broker", cvar_string("nd_broker"));
++	localcmd(sprintf("echo ndnet server %s\n", which));
++	current_menu = MENU_COOP;
++};
++
++void() Menu_Coop_Server =
++{
++	Menu_DrawBackground();
++	Menu_DrawTitle("CHOOSE SERVER");
++
++	Menu_Button(1, "csm_chalkbored", "CHALKBORED SERVER", "Made for ChalkBored. Works on school Wi-Fi.") ? Menu_Coop_PickServer("chalkbored") : 0;
++	Menu_DrawOptionValue(1, "Works at school (recommended)");
++	Menu_Button(2, "csm_builtin", "BUILT-IN SERVER", "The game's own public servers. Often blocked at school.") ? Menu_Coop_PickServer("builtin") : 0;
++	Menu_DrawOptionValue(2, "Public server list, may be blocked");
++
++	Menu_Button(-1, "csm_back", "BACK", "Return to Main Menu.") ? current_menu = MENU_MAIN : 0;
++
++	sui_pop_frame();
++};
++
++float menu_coop_lan_refresh;
++
++void() Menu_Coop_EnterLan =
++{
++	localcmd("echo ndnet lan\n");
++	menu_coop_lan_refresh = time + 5;
++	current_menu = MENU_COOPLAN;
++};
++
++void() Menu_Coop_Lan =
++{
++	if (time > menu_coop_lan_refresh)
++	{
++		localcmd("echo ndnet lan\n");
++		menu_coop_lan_refresh = time + 5;
++	}
++
++	Menu_DrawBackground();
++	Menu_DrawTitle("NETWORK GAMES");
++
++	// nd_lan: "CODE~label|CODE~label|..." (set by the page, at most 6)
++	float n = 0;
++	string list = cvar_string("nd_lan");
++	if (list != "")
++		n = tokenizebyseparator(list, "|");
++	if (n > 6)
++		n = 6;
++	for (float i = 0; i < n; i++)
++	{
++		string entry = argv(i);
++		float sep = strstrofs(entry, "~");
++		string code = substring(entry, 0, sep);
++		Menu_Button(1 + i, sprintf("clm_%d", i), code, "Join this game.") ? Menu_Coop_Connect(code) : 0;
++		Menu_DrawOptionValue(1 + i, substring(entry, sep + 1, -1));
++	}
++	if (n == 0)
++		Menu_DrawOptionValue(1, cvar_string("nd_lanstatus"));
++
++	Menu_Button(-2, "clm_refresh", "REFRESH", "Look for games again.") ? Menu_Coop_EnterLan() : 0;
++	Menu_Button(-1, "clm_back", "BACK", "Return to Join Game Menu.") ? current_menu = MENU_COOPJOIN : 0;
++
++	sui_pop_frame();
++};
++
+ void() Menu_Coop_Join =
+ {
+ 	Menu_DrawBackground();
+ 
+ 	Menu_DrawTitle("JOIN GAME");
+ 
+-	Menu_Button(1, "cjm_browse", "BROWSE SERVERS", "Browse the list of active Servers.") ? current_menu = MENU_COOPBROWSE : 0;
+-	Menu_Button(2, "cjm_direct", "DIRECT IP/ID", "Connect directly to an active Server.") ? current_menu = MENU_COOPDIRECT : 0;
++	if (cvar_string("nd_server") == "builtin")
++		Menu_Button(1, "cjm_browse", "BROWSE SERVERS", "Browse the list of active Servers.") ? current_menu = MENU_COOPBROWSE : 0;
++	else
++		Menu_Button(1, "cjm_browse", "NETWORK GAMES", "Games hosted on your network (same school or home Wi-Fi).") ? Menu_Coop_EnterLan() : 0;
++	Menu_Button(2, "cjm_direct", "ENTER ROOM CODE", "Join a friend's game with its room code.") ? current_menu = MENU_COOPDIRECT : 0;
+ 
+ 	Menu_Button(-1, "cjm_back", "BACK", "Return to Co-Op Menu.") ? current_menu = MENU_COOP : 0;
+ 
+@@ -246,7 +341,7 @@ void() Menu_Coop_EnterJoin =
+ void() Menu_Coop_EnterBack =
+ {
+ 	localcmd("saveconfig user_settings.cfg\n");
+-	current_menu = MENU_MAIN;
++	current_menu = MENU_COOPSERVER;
+ };
+ 
+ void() Menu_Coop =
+@@ -264,7 +359,19 @@ void() Menu_Coop =
+ 	Menu_Button(2.25, "cm_join", "JOIN GAME", "Join an in-progress Match.") ? Menu_Coop_EnterJoin() : 0;
+ 	Menu_Button(3.25, "cm_create", "CREATE GAME", "Create a new Match for others to join.") ? Menu_Coop_EnterCreate() : 0;
+ 
+-	Menu_Button(-1, "cm_back", "BACK", "Return to Main Menu.") ? Menu_Coop_EnterBack() : 0;
++	Menu_DrawDivider(4.25);
++	if (cvar_string("nd_server") == "builtin")
++	{
++		Menu_GreyButton(4.5, "CONNECTION");
++		Menu_DrawOptionValue(4.5, "Built-in server");
++	}
++	else
++	{
++		Menu_Button(4.5, "cm_connection", "CONNECTION", "Auto uses the relay when your network blocks direct play.") ? Menu_Coop_NextMode() : 0;
++		Menu_DrawOptionValue(4.5, Menu_Coop_ModeName());
++	}
++
++	Menu_Button(-1, "cm_back", "BACK", "Return to Server choice.") ? Menu_Coop_EnterBack() : 0;
+ 
+ 	sui_pop_frame();
+ };
+@@ -286,7 +393,15 @@ string menu_coop_create_buttons[] = {
+ };
+ 
+ string menu_coop_buttons[] = {
+-	"cm_playername", "cm_join", "cm_create", "cm_back"
++	"cm_playername", "cm_join", "cm_create", "cm_connection", "cm_back"
++};
++
++string menu_coop_server_buttons[] = {
++	"csm_chalkbored", "csm_builtin", "csm_back"
++};
++
++string menu_coop_lan_buttons[] = {
++	"clm_0", "clm_1", "clm_2", "clm_3", "clm_4", "clm_5", "clm_refresh", "clm_back"
+ };
+ 
+ // can you tell i'm a C user at heart? -- erysdren
+@@ -317,6 +432,8 @@ NEXTBUTTON_FUNC(Menu_Coop_Direct, menu_coop_direct_buttons)
+ NEXTBUTTON_FUNC(Menu_Coop_Join, menu_coop_join_buttons)
+ NEXTBUTTON_FUNC(Menu_Coop_Create, menu_coop_create_buttons)
+ NEXTBUTTON_FUNC(Menu_Coop, menu_coop_buttons)
++NEXTBUTTON_FUNC(Menu_Coop_Server, menu_coop_server_buttons)
++NEXTBUTTON_FUNC(Menu_Coop_Lan, menu_coop_lan_buttons)
+ 
+ #undef NEXTBUTTON_FUNC
+ 
+@@ -346,5 +463,7 @@ PREVBUTTON_FUNC(Menu_Coop_Direct, menu_coop_direct_buttons)
+ PREVBUTTON_FUNC(Menu_Coop_Join, menu_coop_join_buttons)
+ PREVBUTTON_FUNC(Menu_Coop_Create, menu_coop_create_buttons)
+ PREVBUTTON_FUNC(Menu_Coop, menu_coop_buttons)
++PREVBUTTON_FUNC(Menu_Coop_Server, menu_coop_server_buttons)
++PREVBUTTON_FUNC(Menu_Coop_Lan, menu_coop_lan_buttons)
+ 
+ #undef PREVBUTTON_FUNC
+diff --git a/source/menu/menu_main.qc b/source/menu/menu_main.qc
+index 0976e80..1884aff 100644
+--- a/source/menu/menu_main.qc
++++ b/source/menu/menu_main.qc
+@@ -72,7 +72,7 @@ void() Menu_Main =
+     Menu_DrawBuildDate();
+ 
+     Menu_Button(1, "mm_start", "SOLO", "Play Solo.") ? Menu_StartSolo() : 0;
+-    Menu_Button(2, "mm_coop", "COOPERATIVE", "Play with up to Four Players.") ? current_menu = MENU_COOP : 0;
++    Menu_Button(2, "mm_coop", "COOPERATIVE", "Play with up to Four Players.") ? current_menu = MENU_COOPSERVER : 0;
+     Menu_DrawDivider(3);
+     Menu_Button(3.25, "mm_options", "CONFIGURATION", "Tweak Game related Options.") ? current_menu = MENU_OPTIONS : 0;
+     Menu_Button(4.25, "mm_bios", "CHARACTER BIOS", "View Character Bios.") ? current_menu = MENU_BIOS : 0;
+diff --git a/source/menu/menu_paus.qc b/source/menu/menu_paus.qc
+index dbf8008..3dd2a94 100644
+--- a/source/menu/menu_paus.qc
++++ b/source/menu/menu_paus.qc
+@@ -94,6 +94,13 @@ void() Menu_Pause =
+         Menu_Button(3, "pm_opts", "OPTIONS", "Tweak Game related Options.") ? current_menu = MENU_OPTIONS : 0;
+         Menu_Button(4, "pm_quit", "END GAME", "Return to Main Menu.") ? Menu_Pause_EnterSubMenu(2) : 0;
+ 
++        if (isserver() && cvar("sv_public") != 0 && cvar_string("nd_room") != "")
++        {
++            sui_set_align([SUI_ALIGN_START, SUI_ALIGN_START]);
++            sui_text([6, 50 + 5.5 * 25], MENU_TEXT_MEDIUM, sprintf("ROOM CODE: %s", cvar_string("nd_room")), [1, 1, 0], 1, 0);
++            sui_text([6, 50 + 6.25 * 25], MENU_TEXT_SMALL, "Friends join with it: Co-op > Join Game > Enter Room Code.", [1, 1, 1], 1, 0);
++        }
++
+         menu_paus_buttons[0] = "pm_resum";
+         menu_paus_buttons[1] = "pm_reloa";
+         menu_paus_buttons[2] = "pm_opts";
+diff --git a/source/menu/sui_sys.qc b/source/menu/sui_sys.qc
+index 6be6baf..699393c 100644
+--- a/source/menu/sui_sys.qc
++++ b/source/menu/sui_sys.qc
+@@ -430,6 +430,12 @@ void() _sui_menukey_downarrow =
+ 		case MENU_COOPJOIN:
+ 			_hover_actions[0] = Menu_Coop_Join_GetNextButton(current_hovered_option);
+ 			break;
++		case MENU_COOPSERVER:
++			_hover_actions[0] = Menu_Coop_Server_GetNextButton(current_hovered_option);
++			break;
++		case MENU_COOPLAN:
++			_hover_actions[0] = Menu_Coop_Lan_GetNextButton(current_hovered_option);
++			break;
+ 		case MENU_COOPBROWSE:
+ 			_hover_actions[0] = Menu_Coop_Browse_GetNextButton(current_hovered_option);
+ 			break;
+@@ -508,6 +514,12 @@ void() _sui_menukey_uparrow =
+ 		case MENU_COOPJOIN:
+ 			_hover_actions[0] = Menu_Coop_Join_GetPreviousButton(current_hovered_option);
+ 			break;
++		case MENU_COOPSERVER:
++			_hover_actions[0] = Menu_Coop_Server_GetPreviousButton(current_hovered_option);
++			break;
++		case MENU_COOPLAN:
++			_hover_actions[0] = Menu_Coop_Lan_GetPreviousButton(current_hovered_option);
++			break;
+ 		case MENU_COOPBROWSE:
+ 			_hover_actions[0] = Menu_Coop_Browse_GetPreviousButton(current_hovered_option);
+ 			break;
